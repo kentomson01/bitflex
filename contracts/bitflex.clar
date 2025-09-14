@@ -303,3 +303,74 @@
 (define-read-only (get-asset-details (asset-id uint))
   (map-get? asset-registry { asset-id: asset-id })
 )
+
+;; Token Balance Inquiry
+(define-read-only (get-token-balance
+    (holder principal)
+    (asset-id uint)
+  )
+  (default-to u0
+    (get balance
+      (map-get? token-holdings {
+        owner: holder,
+        asset-id: asset-id,
+      })
+    ))
+)
+
+;; Proposal Status Check
+(define-read-only (get-proposal-details (proposal-id uint))
+  (map-get? governance-proposals { proposal-id: proposal-id })
+)
+
+;; Voting Record Lookup
+(define-read-only (get-voting-record
+    (proposal-id uint)
+    (voter principal)
+  )
+  (map-get? voting-records {
+    proposal-id: proposal-id,
+    voter: voter,
+  })
+)
+
+;; Market Data Access
+(define-read-only (get-market-price (asset-id uint))
+  (map-get? market-data { asset-id: asset-id })
+)
+
+;; Dividend History Query
+(define-read-only (get-last-dividend-claim
+    (asset-id uint)
+    (beneficiary principal)
+  )
+  (default-to u0
+    (get last-claimed-amount
+      (map-get? dividend-ledger {
+        asset-id: asset-id,
+        beneficiary: beneficiary,
+      })
+    ))
+)
+
+;; INTERNAL HELPER FUNCTIONS
+
+;; Asset ID Generation Logic
+(define-private (get-next-asset-id)
+  (default-to u1 (get-last-registered-asset-id))
+)
+
+;; Proposal ID Generation Logic
+(define-private (get-next-proposal-id)
+  (default-to u1 (get-last-created-proposal-id))
+)
+
+;; Asset ID Counter (Implementation Placeholder)
+(define-private (get-last-registered-asset-id)
+  none
+)
+
+;; Proposal ID Counter (Implementation Placeholder)  
+(define-private (get-last-created-proposal-id)
+  none
+)
