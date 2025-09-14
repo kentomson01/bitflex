@@ -206,3 +206,100 @@
     )
   )
 )
+
+;; Automated Dividend Distribution System
+(define-public (harvest-dividends (asset-id uint))
+  (let (
+      (asset-data (unwrap! (get-asset-details asset-id) ERR-NOT-FOUND))
+      (token-balance (get-token-balance tx-sender asset-id))
+      (last-harvest (get-last-dividend-claim asset-id tx-sender))
+      (total-dividends (get total-dividends asset-data))
+      (harvestable-amount (/ (* token-balance (- total-dividends last-harvest)) TOKENS-PER-ASSET))
+    )
+    (asserts! (> harvestable-amount u0) ERR-INVALID-AMOUNT)
+    (ok (map-set dividend-ledger {
+      asset-id: asset-id,
+      beneficiary: tx-sender,
+    } { last-claimed-amount: total-dividends }
+    ))
+  )
+)
+
+;; Intelligent Governance System
+(define-public (initiate-proposal
+    (asset-id uint)
+    (proposal-title (string-ascii 256))
+    (voting-duration uint)
+    (minimum-threshold uint)
+  )
+  (begin
+    (asserts! (validate-proposal-duration voting-duration) ERR-INVALID-DURATION)
+    (asserts! (validate-vote-threshold minimum-threshold) ERR-INVALID-VOTES)
+    (asserts! (validate-metadata-uri proposal-title) ERR-INVALID-TITLE)
+    (asserts!
+      (>= (get-token-balance tx-sender asset-id) (/ TOKENS-PER-ASSET u10))
+      ERR-NOT-AUTHORIZED
+    )
+
+    (let ((new-proposal-id (get-next-proposal-id)))
+      (ok (map-set governance-proposals { proposal-id: new-proposal-id } {
+        title: proposal-title,
+        asset-id: asset-id,
+        start-height: stacks-block-height,
+        end-height: (+ stacks-block-height voting-duration),
+        is-executed: false,
+        votes-for: u0,
+        votes-against: u0,
+        minimum-threshold: minimum-threshold,
+      }))
+    )
+  )
+)
+
+;; Weighted Voting Mechanism
+(define-public (cast-vote
+    (proposal-id uint)
+    (support-proposal bool)
+    (vote-weight uint)
+  )
+  (let (
+      (proposal-data (unwrap! (get-proposal-details proposal-id) ERR-NOT-FOUND))
+      (target-asset-id (get asset-id proposal-data))
+      (voter-balance (get-token-balance tx-sender target-asset-id))
+    )
+    (begin
+      (asserts! (>= voter-balance vote-weight) ERR-INVALID-AMOUNT)
+      (asserts! (< stacks-block-height (get end-height proposal-data))
+        ERR-VOTE-ENDED
+      )
+      (asserts! (is-none (get-voting-record proposal-id tx-sender))
+        ERR-VOTE-EXISTS
+      )
+
+      (map-set voting-records {
+        proposal-id: proposal-id,
+        voter: tx-sender,
+      } { vote-weight: vote-weight }
+      )
+      (ok (map-set governance-proposals { proposal-id: proposal-id }
+        (merge proposal-data {
+          votes-for: (if support-proposal
+            (+ (get votes-for proposal-data) vote-weight)
+            (get votes-for proposal-data)
+          ),
+          votes-against: (if support-proposal
+            (get votes-against proposal-data)
+            (+ (get votes-against proposal-data) vote-weight)
+          ),
+        })
+      ))
+    )
+  )
+)
+
+;; READ-ONLY QUERY FUNCTIONS
+
+;; Asset Information Retrieval
+(define-read-only (get-asset-details (asset-id uint))
+  (map-get? asset-registry { asset-id: asset-id })
+)
